@@ -1,25 +1,152 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Course Project 1"
+author: "Jie Tao"
+date: "8/27/2020"
+output:
+  html_document: default
+  pdf_document: default
 ---
-
 
 ## Loading and preprocessing the data
 
+```{r }
+library(tidyverse)
 
+download.file(url = "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", 
+              destfile = "E:/Data Science Specialization/Reproducible Research/Course Project 1/activity.zip")
 
+activity <- read_csv(file = unz(description = "E:/Data Science Specialization/Reproducible Research/Course Project 1/activity.zip", 
+                                filename = "activity.csv"), col_names = TRUE )
+
+str(activity)
+head(activity)
+tail(activity)
+```
 ## What is mean total number of steps taken per day?
 
+```{r}
 
+# total number of steps taken per day
+library(lubridate)
+total_steps_pd <- activity %>% 
+    mutate(year = year(date), month = month(date), mday = mday(date)) %>% 
+    group_by(year, month, mday) %>% 
+    summarize(total_steps_pd = sum(steps, na.rm = TRUE))
 
+# histogram of the total number of steps taken per day
+total_steps_pd %>% 
+    ggplot(aes(total_steps_pd)) +
+    geom_histogram(binwidth = 1000) +
+    geom_vline(aes(xintercept = mean(total_steps_pd)), color = "red") +
+    geom_vline(aes(xintercept = median(total_steps_pd)), color = "green") +
+    geom_text(aes(x = mean(total_steps_pd), 
+                  y = 10), label = "Mean", hjust = 1, size = 5) +
+    geom_text(aes(x = median(total_steps_pd), 
+                  y = 10), label = "Median", hjust = 0, size = 5) +
+    labs(x = "Total Steps",
+         y = "Number of Days",
+         title = "Total Number of Steps Taken Each Day") + 
+    theme_bw()
+
+# mean and median of the total number of steps taken per day
+mean(total_steps_pd$total_steps_pd)
+median(total_steps_pd$total_steps_pd)
+```
 ## What is the average daily activity pattern?
 
+```{r}
 
+# average steps taken by 5-minute intervals
+avg_steps_by_int_day <- activity %>% 
+    mutate(year = year(date), month = month(date), mday = mday(date)) %>% 
+    group_by(interval) %>% 
+    summarize(avg_sbid = mean(steps, na.rm = TRUE))
 
-## Imputing missing values
+# time series plot
+avg_steps_by_int_day %>% 
+    ggplot(aes(interval, avg_sbid)) +
+    geom_line() + 
+    geom_vline(aes(xintercept = 835, color = "blue")) +
+    geom_text(aes(x = 835, y = 200), label = "Maximum Steps", hjust = -0.2, size = 4) +
+    labs(x = "5-Minute Interval",
+         y = "Average Number of Steps",
+         title = "5-Minute Interval Activity Pattern Across All Days") +
+    scale_x_continuous(breaks = c(0, 500, 1000, 1500, 2000, 2500)) +
+    xlim(0, 2500) +
+    theme_bw() +
+    theme(legend.position = "none")
 
+# which 5-minute interval has the maximum number of steps across all days
+avg_steps_by_int_day_ranked <- avg_steps_by_int_day %>% 
+    arrange(desc(avg_sbid)) 
+avg_steps_by_int_day_ranked[1, ]
 
+```
+## Imputing missing value
+
+```{r}
+# total number of missing values in the dataset
+sum(is.na(activity))
+
+# imputation strategy (I use mean for the 5-minute interval to impute)
+activity1 <- activity
+activity1$all_steps <- 
+    ifelse(is.na(activity$steps), avg_steps_by_int_day$avg_sbid[match(activity$interval, avg_steps_by_int_day$interval)], activity$steps)
+
+total_steps_pd1 <- activity1 %>% 
+    mutate(year = year(date), month = month(date), mday = mday(date)) %>% 
+    group_by(year, month, mday) %>% 
+    summarize(total_steps_pd = sum(all_steps, na.rm = TRUE))
+
+# histogram of the total number of steps taken per day
+total_steps_pd1 %>% 
+    ggplot(aes(total_steps_pd)) +
+    geom_histogram(binwidth = 1000) +
+    geom_vline(aes(xintercept = mean(total_steps_pd1$total_steps_pd)), color = "red") +
+    geom_vline(aes(xintercept = median(total_steps_pd1$total_steps_pd)), color = "red") +
+    geom_text(aes(x = mean(total_steps_pd1$total_steps_pd), 
+                  y = 15), label = "Mean and Median", hjust = 1, size = 5) +
+    labs(x = "Total Steps",
+         y = "Number of Days",
+         title = "Total Number of Steps Taken Each Day") + 
+    theme_bw()
+
+# meand and median 
+mean(total_steps_pd1$total_steps_pd)
+median(total_steps_pd1$total_steps_pd)
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+#create factor variable
+activity1 <- activity1 %>% 
+    mutate(weekday = weekdays(date), wd_we = as_factor(case_when(weekday == "Monday" |
+                                                       weekday == "Tuesday" |
+                                                       weekday == "Wednesday" |
+                                                       weekday == "Thursday" |
+                                                       weekday == "Friday" ~ "weekday",
+                                                       weekday == "Saturday" |
+                                                       weekday == "Sunday" ~ "weekend"))) 
+
+# group by 5-minute interval and factor variable
+avg_steps_wdwe <- activity1 %>% 
+    group_by(interval, wd_we) %>% 
+    summarize(avg_steps_by_int_wdwe = mean(all_steps, na.rm = TRUE))
+
+# making a panel plot
+avg_steps_wdwe %>% 
+    ggplot(aes(interval, avg_steps_by_int_wdwe, color = wd_we)) +
+    geom_line() +
+    facet_wrap(vars(wd_we), nrow = 2) + 
+    labs(x = "5-Minute Interval",
+         y = "Average Number of Steps",
+         title = "5-Minute Interval Activity Pattern Across All Weekdays or Weekends") +
+    scale_x_continuous(breaks = c(0, 500, 1000, 1500, 2000, 2500)) +
+    scale_color_discrete(name = "Day in the Week") +
+    xlim(0, 2500) +
+    theme_bw() +
+    theme(legend.position = "none")
+
+```
+
